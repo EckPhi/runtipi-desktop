@@ -1,6 +1,6 @@
 [package]
 name = "runtipi-desktop"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 description = "A desktop workspace for multiple Runtipi instances"
 authors = ["EckPhi"]
 license = "MIT"

@@ -45,7 +45,7 @@ Tauri's child-webview API currently requires its `unstable` Cargo feature. Popup
 
 ## CI and releases
 
-`.github/workflows/desktop.yml` validates and tests the frontend, formats/lints/tests Rust, and builds installers on all four targets for pushes, pull requests, and manual runs. Installers are retained as workflow artifacts. A `v*` tag additionally publishes a GitHub Release only after all builds succeed. Versions must match across `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
+`.github/workflows/desktop.yml` validates and tests the frontend, formats/lints/tests Rust, and builds installers on all four targets for pushes, pull requests, and manual runs. Installers are retained as workflow artifacts. A `v*` tag additionally publishes a GitHub Release only after all builds succeed. Versions must match across `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`. Windows MSI requires a numeric version, so `bundle.windows.wix.version` explicitly uses `major.minor.patch.build` (for example, `0.1.0.2` for `0.1.0-alpha.2`); update it alongside the app version. The release guard verifies its numeric format and matching base version.
 
 To release, update all three version fields and the npm/Cargo lockfiles, commit, and push a matching tag:
 
