@@ -72,7 +72,7 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: '1'
         uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1
         with:
-          args: --target ${{ matrix.target }} --locked
+          args: --target ${{ matrix.target }} -- --locked
           uploadUpdaterJson: false
       - name: Upload installers
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

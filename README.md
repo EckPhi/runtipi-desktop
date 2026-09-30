@@ -32,7 +32,7 @@ npm run build
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml --locked
-npm run tauri build -- --locked
+npm run tauri -- build -- --locked
 ```
 
 ## Architecture and storage
