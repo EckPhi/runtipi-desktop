@@ -27,6 +27,7 @@ On Ubuntu/Debian, the build requires `libwebkit2gtk-4.1-dev`, `libappindicator3-
 
 ```sh
 npm run check
+npm test
 npm run build
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --locked --all-targets -- -D warnings
@@ -44,7 +45,7 @@ Tauri's child-webview API currently requires its `unstable` Cargo feature. Popup
 
 ## CI and releases
 
-`.github/workflows/desktop.yml` validates the frontend, formats/lints/tests Rust, and builds installers on all four targets for pushes, pull requests, and manual runs. Installers are retained as workflow artifacts. A `v*` tag additionally publishes a GitHub Release only after all builds succeed. Versions must match across `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
+`.github/workflows/desktop.yml` validates and tests the frontend, formats/lints/tests Rust, and builds installers on all four targets for pushes, pull requests, and manual runs. Installers are retained as workflow artifacts. A `v*` tag additionally publishes a GitHub Release only after all builds succeed. Versions must match across `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
 
 To release, update all three version fields and the npm/Cargo lockfiles, commit, and push a matching tag:
 

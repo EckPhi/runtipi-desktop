@@ -20,6 +20,7 @@
   let url = $state('');
   let tabUrl = $state('');
   let header: HTMLElement;
+  let headerHeight = $state(150);
   let sequence = Promise.resolve();
   const visibleTabs = $derived(tabs.filter(t => t.instanceId === selected));
   const active = $derived(tabs.find(t => t.id === activeByInstance[selected]));
@@ -92,9 +93,10 @@
     const id = editing || crypto.randomUUID();
     const item = { id, name: name.trim(), url: normalized.toString() };
     const instances = editing ? settings.instances.map(i => i.id === id ? item : i) : [...settings.instances, item];
+    const previousUrl = settings.instances.find(i => i.id === id)?.url;
     await persist({ instances, defaultInstance: settings.defaultInstance ?? id });
     // Recreate tabs after an endpoint change rather than leaving the old dashboard open.
-    if (editing && tabs.some(t => t.instanceId === id && t.dashboard && t.url !== item.url)) {
+    if (editing && previousUrl !== item.url) {
       for (const tab of tabs.filter(t => t.instanceId === id)) await control(tab.id, 'close');
       tabs = tabs.filter(t => t.instanceId !== id);
       delete activeByInstance[id];
@@ -119,9 +121,12 @@
   onMount(() => {
     const unlisten: UnlistenFn[] = [];
     let disposed = false;
-    const resize = () => enqueue(async () => {
-      if (active && !showSettings && !newTab) await control(active.id, 'resize');
-    });
+    const resize = () => {
+      headerHeight = bounds();
+      sequence = sequence.then(async () => {
+        if (active && !showSettings && !newTab) await control(active.id, 'resize');
+      }).catch(e => { error = String(e); });
+    };
     const observer = new ResizeObserver(resize);
     observer.observe(header);
     window.addEventListener('resize', resize);
@@ -158,7 +163,7 @@
   <div class="topbar">
     <button class="brand" disabled={busy || !selected} onclick={() => selected && enqueue(() => switchInstance(selected))}>◈ <span>Runtipi Desktop</span></button>
     <label class="selector">Instance
-      <select value={selected} disabled={!ready || busy || !settings.instances.length} onchange={e => enqueue(() => switchInstance(e.currentTarget.value))}>
+      <select value={selected} disabled={!ready || busy || !settings.instances.length} onchange={e => { const id = e.currentTarget.value; void enqueue(() => switchInstance(id)); }}>
         {#if !settings.instances.length}<option value="">Add an instance</option>{/if}
         {#each settings.instances as item}<option value={item.id}>{item.name}</option>{/each}
       </select>
@@ -184,7 +189,7 @@
   {#if error}<div class="error" role="alert">{error}<button onclick={() => error = ''} aria-label="Dismiss error">×</button></div>{/if}
 </header>
 
-<main>
+<main style:height={`calc(100vh - ${headerHeight}px)`}>
   {#if showSettings}
     <section class="settings">
       <div class="intro"><span class="eyebrow">YOUR WORKSPACE</span><h1>Every server. One place.</h1><p>Add your Runtipi dashboards and keep their apps in separate workspaces.</p></div>
