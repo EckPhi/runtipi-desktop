@@ -12,7 +12,28 @@ A desktop workspace for multiple [Runtipi](https://runtipi.io) instances, built 
 
 Installers are published to [GitHub Releases](https://github.com/EckPhi/runtipi-desktop/releases). Windows x64, Linux x64 (Debian/RPM/AppImage), and macOS Intel / Apple Silicon are targeted. macOS 14+ is required for separate persistent browser profiles.
 
-Initial releases are unsigned and not notarized. Tab/window rendering and app authentication still need manual verification on each operating system. Runtipi and its apps must be reachable from your desktop; this client does not provide a VPN or tunnel.
+Windows releases are unsigned. Since `v0.1.0-alpha.3`, macOS app bundles are ad-hoc signed and their signatures are verified inside each packaged DMG in CI; they are not notarized and still require manual approval in macOS. Tab/window rendering and app authentication still need manual verification on each operating system. Runtipi and its apps must be reachable from your desktop; this client does not provide a VPN or tunnel.
+
+## Opening the macOS prerelease
+
+Copy **Runtipi Desktop.app** from the DMG to **Applications**, then eject the disk image. Try opening it and use **System Settings → Privacy & Security → Open Anyway** if offered. These development builds are not notarized by Apple.
+
+If Gatekeeper instead reports that the app is damaged, and you trust the release downloaded from this repository, remove quarantine from this app only:
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Runtipi Desktop.app"
+open "/Applications/Runtipi Desktop.app"
+```
+
+Use the `aarch64.dmg` build on Apple Silicon or `x64.dmg` on Intel. This client requires macOS 14+. If it still fails, inspect the signature and macOS version:
+
+```sh
+codesign --verify --deep --strict --verbose=2 "/Applications/Runtipi Desktop.app"
+sw_vers
+uname -m
+```
+
+A valid ad-hoc signature checks bundle integrity but does not verify the publisher or grant Gatekeeper approval. Distribution without manual approval requires a Developer ID Application certificate and Apple notarization. See [Tauri’s macOS signing documentation](https://v2.tauri.app/distribute/sign/macos/).
 
 ## Development
 
@@ -54,7 +75,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-Tags containing a hyphen (such as `v0.1.0-alpha.1`) produce prereleases. No deployment secrets are needed: the release job uses the repository-scoped GitHub Actions token. Code signing, notarization, and an in-app updater are not configured yet.
+Tags containing a hyphen (such as `v0.1.0-alpha.1`) produce prereleases. No deployment secrets are needed: the release job uses the repository-scoped GitHub Actions token. macOS ad-hoc bundle signing is configured. Developer ID signing, notarization, and an in-app updater are not configured yet. CI verifies the signatures of the actual apps mounted from both Mac DMGs before allowing publication.
 
 ## License
 
