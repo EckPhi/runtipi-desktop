@@ -198,12 +198,12 @@ async fn control_tab(
                 .inner_size()
                 .map_err(|e| e.to_string())?
                 .to_logical::<f64>(window.scale_factor().map_err(|e| e.to_string())?);
-            tab.set_position(tauri::LogicalPosition::new(0.0, top))
-                .map_err(|e| e.to_string())?;
-            tab.set_size(tauri::LogicalSize::new(
-                size.width,
-                (size.height - top).max(1.0),
-            ))
+            // Update the rectangle together; separate position/size updates
+            // read native coordinates back between calls on macOS.
+            tab.set_bounds(tauri::Rect {
+                position: tauri::LogicalPosition::new(0.0, top).into(),
+                size: tauri::LogicalSize::new(size.width, (size.height - top).max(1.0)).into(),
+            })
         }
         "external" => {
             let url = tab.url().map_err(|e| e.to_string())?;
