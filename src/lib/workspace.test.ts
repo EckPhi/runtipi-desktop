@@ -62,6 +62,19 @@ describe('desktop workspace', () => {
     await screen.findByText('Office', { selector: 'strong' });
   });
 
+  it('selects a Proton login by metadata and restores the page after filling', async () => {
+    await boot();
+    invoke.mockImplementation(async command => command === 'list_logins' ? { origin: 'http://home.local', items: [{ id: 'login', share_id: 'vault', title: 'Home login' }] } : undefined);
+    await fireEvent.click(screen.getByRole('button', { name: 'Proton Pass' }));
+    const login = await screen.findByRole('button', { name: 'Home login' });
+    expect(invoke).toHaveBeenCalledWith('control_tab', expect.objectContaining({ action: 'hide' }));
+    await fireEvent.click(login);
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('fill_login', expect.objectContaining({ shareId: 'vault', itemId: 'login', origin: 'http://home.local', mode: 'both' })));
+    await screen.findByRole('status');
+    expect(invoke).toHaveBeenCalledWith('control_tab', expect.objectContaining({ action: 'focus' }));
+    expect(screen.queryByRole('heading', { name: 'Choose a login' })).toBeNull();
+  });
+
   it('keeps configuration intact and shows an error when persistence fails', async () => {
     await boot();
     invoke.mockImplementation(async command => { if (command === 'save_settings') throw new Error('Disk is read-only'); });

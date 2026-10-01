@@ -1,3 +1,4 @@
+mod proton;
 use serde::{Deserialize, Serialize};
 use std::{fs, sync::Mutex};
 use tauri::{Emitter, Manager, Webview, WebviewUrl};
@@ -13,10 +14,12 @@ struct Instance {
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(default, rename_all = "camelCase")]
 struct Settings {
     instances: Vec<Instance>,
     default_instance: Option<Uuid>,
+    proton_cli_path: Option<String>,
+    proton_vault: Option<String>,
 }
 
 struct State(Mutex<Settings>);
@@ -183,6 +186,7 @@ async fn control_tab(
         .ok_or("Tab is no longer available")?;
     let result = match action.as_str() {
         "show" => tab.show(),
+        "focus" => tab.set_focus(),
         "hide" => tab.hide(),
         "close" => tab.close(),
         "back" => tab.eval("history.back()"),
@@ -236,7 +240,9 @@ pub fn run() {
             load_settings,
             save_settings,
             create_tab,
-            control_tab
+            control_tab,
+            proton::list_logins,
+            proton::fill_login
         ])
         .run(tauri::generate_context!())
         .expect("error while running Runtipi Desktop");

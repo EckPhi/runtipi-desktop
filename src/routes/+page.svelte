@@ -4,13 +4,23 @@
   import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
   type Instance = { id: string; name: string; url: string };
-  type Settings = { instances: Instance[]; defaultInstance: string | null };
+  type Settings = { instances: Instance[]; defaultInstance: string | null; protonCliPath?: string | null; protonVault?: string | null };
   type Tab = { id: string; instanceId: string; name: string; url: string; dashboard: boolean };
   let settings = $state<Settings>({ instances: [], defaultInstance: null });
   let selected = $state('');
   let tabs = $state<Tab[]>([]);
   let activeByInstance = $state<Record<string, string>>({});
   let showSettings = $state(false);
+  type LoginSummary = { id: string; share_id: string; title: string };
+  let showPasswords = $state(false);
+  let passwordItems = $state<LoginSummary[]>([]);
+  let passwordOrigin = $state('');
+  let passwordTabId = $state('');
+  let passwordSearch = $state('');
+  let fillMode = $state('both');
+  let cliPath = $state('');
+  let vaultName = $state('');
+  let notice = $state('');
   let newTab = $state(false);
   let ready = $state(false);
   let busy = $state(false);
@@ -31,6 +41,7 @@
     sequence = sequence.then(async () => {
       busy = true;
       error = '';
+      notice = '';
       try { await work(); } catch (e) { error = String(e); }
       finally { busy = false; }
     });
@@ -51,6 +62,7 @@
     selected = tab.instanceId;
     activeByInstance[selected] = id;
     showSettings = false;
+    showPasswords = false;
     newTab = false;
     await control(id, 'resize');
     await control(id, 'show');
@@ -98,7 +110,7 @@
     const item = { id, name: name.trim(), url: normalized.toString() };
     const instances = editing ? settings.instances.map(i => i.id === id ? item : i) : [...settings.instances, item];
     const previousUrl = settings.instances.find(i => i.id === id)?.url;
-    await persist({ instances, defaultInstance: settings.defaultInstance ?? id });
+    await persist({ ...settings, instances, defaultInstance: settings.defaultInstance ?? id });
     // Recreate tabs after an endpoint change rather than leaving the old dashboard open.
     if (editing && previousUrl !== item.url) {
       for (const tab of tabs.filter(t => t.instanceId === id)) await control(tab.id, 'close');
@@ -110,7 +122,7 @@
   }
   async function removeInstance(item: Instance) {
     const instances = settings.instances.filter(i => i.id !== item.id);
-    await persist({ instances, defaultInstance: settings.defaultInstance === item.id ? instances[0]?.id ?? null : settings.defaultInstance });
+    await persist({ ...settings, instances, defaultInstance: settings.defaultInstance === item.id ? instances[0]?.id ?? null : settings.defaultInstance });
     for (const tab of tabs.filter(t => t.instanceId === item.id)) await control(tab.id, 'close');
     tabs = tabs.filter(t => t.instanceId !== item.id);
     delete activeByInstance[item.id];
@@ -122,13 +134,31 @@
     [instances[index], instances[index + offset]] = [instances[index + offset], instances[index]];
     await persist({ ...settings, instances });
   }
+  async function openPasswords() {
+    if (!active) return;
+    passwordTabId = active.id;
+    passwordItems = [];
+    passwordOrigin = '';
+    passwordSearch = '';
+    await hideAll();
+    showPasswords = true;
+    const result = await invoke<{ origin: string; items: LoginSummary[] }>('list_logins', { tabId: passwordTabId });
+    passwordOrigin = result.origin;
+    passwordItems = result.items;
+  }
+  async function fillPassword(item: LoginSummary) {
+    await invoke('fill_login', { tabId: passwordTabId, shareId: item.share_id, itemId: item.id, origin: passwordOrigin, mode: fillMode });
+    await activate(passwordTabId);
+    await control(passwordTabId, 'focus');
+    notice = 'Login filled. Review it and submit in the page.';
+  }
   onMount(() => {
     const unlisten: UnlistenFn[] = [];
     let disposed = false;
     const resize = () => {
       headerHeight = bounds();
       sequence = sequence.then(async () => {
-        if (active && !showSettings && !newTab) await control(active.id, 'resize');
+        if (active && !showSettings && !showPasswords && !newTab) await control(active.id, 'resize');
       }).catch(e => { error = String(e); });
     };
     const observer = new ResizeObserver(resize);
@@ -152,6 +182,8 @@
       if (disposed) { listeners.forEach(fn => fn()); return; }
       unlisten.push(...listeners);
       settings = await invoke<Settings>('load_settings');
+      cliPath = settings.protonCliPath ?? '';
+      vaultName = settings.protonVault ?? '';
       selected = settings.defaultInstance ?? settings.instances[0]?.id ?? '';
       ready = true;
       if (selected) await switchInstance(selected);
@@ -172,29 +204,46 @@
         {#each settings.instances as item}<option value={item.id}>{item.name}</option>{/each}
       </select>
     </label>
-    <button class:chosen={showSettings} disabled={!ready || busy} onclick={() => enqueue(async () => { await hideAll(); showSettings = true; newTab = false; })}>Settings</button>
+    <button class:chosen={showSettings} disabled={!ready || busy} onclick={() => enqueue(async () => { await hideAll(); showSettings = true; showPasswords = false; newTab = false; })}>Settings</button>
   </div>
   <nav aria-label="Browser tabs" class="tabs">
     {#each visibleTabs as tab}
-      <div class:active={active?.id === tab.id && !showSettings && !newTab} class="tab">
+      <div class:active={active?.id === tab.id && !showSettings && !showPasswords && !newTab} class="tab">
         <button class="tab-title" disabled={busy} onclick={() => enqueue(() => activate(tab.id))} title={tab.name}>{tab.name}</button>
         {#if !tab.dashboard}<button class="close" disabled={busy} aria-label={`Close ${tab.name}`} onclick={() => enqueue(() => closeTab(tab))}>×</button>{/if}
       </div>
     {/each}
-    <button class="add-tab" disabled={!selected || busy} aria-label="New tab" onclick={() => enqueue(async () => { await hideAll(); showSettings = false; newTab = true; tabUrl = ''; })}>+</button>
+    <button class="add-tab" disabled={!selected || busy} aria-label="New tab" onclick={() => enqueue(async () => { await hideAll(); showSettings = false; showPasswords = false; newTab = true; tabUrl = ''; })}>+</button>
   </nav>
   <div class="navigation">
-    <button aria-label="Back" disabled={!active || showSettings || newTab || busy} onclick={() => active && enqueue(() => control(active.id, 'back'))}>←</button>
-    <button aria-label="Forward" disabled={!active || showSettings || newTab || busy} onclick={() => active && enqueue(() => control(active.id, 'forward'))}>→</button>
-    <button disabled={!active || showSettings || newTab || busy} onclick={() => active && enqueue(() => control(active.id, 'reload'))}>Reload</button>
-    <span class="address" title={active?.url}>{showSettings ? 'Workspace settings' : newTab ? 'New application tab' : active?.url ?? 'Welcome'}</span>
-    <button disabled={!active || showSettings || newTab || busy} onclick={() => active && enqueue(() => control(active.id, 'external'))}>Open externally ↗</button>
+    <button aria-label="Back" disabled={!active || showSettings || showPasswords || newTab || busy} onclick={() => active && enqueue(() => control(active.id, 'back'))}>←</button>
+    <button aria-label="Forward" disabled={!active || showSettings || showPasswords || newTab || busy} onclick={() => active && enqueue(() => control(active.id, 'forward'))}>→</button>
+    <button disabled={!active || showSettings || showPasswords || newTab || busy} onclick={() => active && enqueue(() => control(active.id, 'reload'))}>Reload</button>
+    <span class="address" title={active?.url}>{showSettings ? 'Workspace settings' : showPasswords ? 'Proton Pass' : newTab ? 'New application tab' : active?.url ?? 'Welcome'}</span>
+    <button disabled={!active || showSettings || showPasswords || newTab || busy} onclick={() => enqueue(openPasswords)}>Proton Pass</button>
+    <button disabled={!active || showSettings || showPasswords || newTab || busy} onclick={() => active && enqueue(() => control(active.id, 'external'))}>Open externally ↗</button>
   </div>
   {#if error}<div class="error" role="alert">{error}<button onclick={() => error = ''} aria-label="Dismiss error">×</button></div>{/if}
+  {#if notice}<div class="notice" role="status">{notice}</div>{/if}
 </header>
 
 <main style:height={`calc(100vh - ${headerHeight}px)`}>
-  {#if showSettings}
+  {#if showPasswords}
+    <section class="settings">
+      <span class="eyebrow">PROTON PASS</span><h1>Choose a login</h1>
+      <p>Filling into <strong>{passwordOrigin || 'the current page'}</strong>. The selected login must have a saved URL with the same scheme, host, and port. Nothing is submitted automatically.</p>
+      <div class="card">
+        <label>Search saved login titles<input bind:value={passwordSearch} type="search" /></label>
+        <label>Fill fields<select bind:value={fillMode}><option value="both">Username and password</option><option value="username">Username only</option><option value="password">Password only</option></select></label>
+        {#each passwordItems.filter(item => item.title.toLowerCase().includes(passwordSearch.toLowerCase())) as item}
+          <div class="instance-row"><button disabled={busy} onclick={() => enqueue(() => fillPassword(item))}>{item.title || 'Untitled login'}</button></div>
+        {/each}
+        {#if !passwordItems.length}<p>{busy ? 'Reading login titles from Proton Pass…' : 'No logins loaded. Install and sign in to the official pass-cli, then configure its vault in Settings.'}</p>{/if}
+        <button disabled={busy} onclick={() => enqueue(openPasswords)}>Refresh logins</button>
+        <button disabled={busy} onclick={() => enqueue(() => activate(passwordTabId))}>Return to page</button>
+      </div>
+    </section>
+  {:else if showSettings}
     <section class="settings">
       <div class="intro"><span class="eyebrow">YOUR WORKSPACE</span><h1>Every server. One place.</h1><p>Add your Runtipi dashboards and keep their apps in separate workspaces.</p></div>
       <div class="settings-grid">
@@ -220,6 +269,14 @@
           <div class="form-actions"><button class="primary" disabled={busy}>{editing ? 'Save changes' : 'Add instance'}</button>{#if editing}<button type="button" onclick={() => edit()}>Cancel</button>{/if}</div>
         </form>
       </div>
+      <form class="card" onsubmit={e => { e.preventDefault(); void enqueue(async () => { await persist({ ...settings, protonCliPath: cliPath.trim() || null, protonVault: vaultName.trim() || null }); notice = 'Proton Pass settings saved.'; }); }}>
+        <h2>Proton Pass</h2>
+        <p>Install the official Proton Pass CLI and run <code>pass-cli login</code> in a terminal. Then use Proton Pass in the toolbar to choose and fill a login. Your vault password is never entered here.</p>
+        <label>CLI executable path (optional)<input bind:value={cliPath} placeholder="/opt/homebrew/bin/pass-cli" /></label>
+        <label>Vault name (optional)<input bind:value={vaultName} placeholder="Use the CLI default vault" /></label>
+        <p class="muted">Use an absolute executable path if the app cannot find pass-cli. Save the exact dashboard/app URL on each login in Proton Pass. For two-step login pages, choose Username only or Password only.</p>
+        <button class="primary" disabled={busy}>Save Proton Pass settings</button>
+      </form>
       {#if selected}<button class="primary" disabled={busy} onclick={() => enqueue(() => switchInstance(selected))}>Open {instance?.name ?? 'dashboard'} →</button>{/if}
       <p class="muted footnote">Removing an instance closes its tabs. Its saved browser profile remains on this device.</p>
     </section>
@@ -232,5 +289,6 @@
 </main>
 
 <style>
+  .notice{padding:8px 20px;background:#173d35;color:#b3f1df}.settings > form.card{margin-bottom:24px}
   :global(*){box-sizing:border-box} :global(body){margin:0;background:#0e1420;color:#e5ecf6;font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-size:14px} :global(button),:global(input),:global(select){font:inherit} :global(button){cursor:pointer;border:1px solid #303e52;background:#1b2738;color:#dbe5f3;border-radius:7px;padding:8px 12px} :global(button:hover:not(:disabled)){background:#2b3c53} :global(button:disabled){opacity:.45;cursor:default} :global(button:focus-visible),:global(input:focus-visible),:global(select:focus-visible){outline:2px solid #66d6bc;outline-offset:2px} :global(input),:global(select){background:#101a28;color:#e5ecf6;border:1px solid #34465c;border-radius:7px;padding:10px} header{background:#141e2c;border-bottom:1px solid #304055;padding-bottom:4px;flex-shrink:0} .topbar{min-height:64px;display:flex;gap:24px;align-items:center;padding:14px 20px} .brand{background:none;border:0;padding:0;color:#67dfc2;font-size:22px;font-weight:750;text-decoration:none;white-space:nowrap}.brand span{color:#e5ecf6;font-size:16px;margin-left:8px}.selector{display:flex;align-items:center;gap:10px;color:#9aabc0;margin-left:auto}.selector select{min-width:180px;padding:7px}.chosen{border-color:#67dfc2} .tabs{display:flex;align-items:center;gap:5px;padding:0 20px;overflow-x:auto;min-height:40px}.tab{display:flex;max-width:220px;border:1px solid transparent;border-radius:8px 8px 0 0;background:#1b2738}.tab.active{background:#293c50;border-color:#456677;border-bottom:2px solid #67dfc2}.tab-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:0;background:none}.close{border:0;background:none;padding:6px}.add-tab{border:0;background:none;font-size:21px;padding:3px 12px}.navigation{min-height:48px;display:flex;gap:7px;align-items:center;padding:9px 20px;background:#101925}.navigation button{font-size:12px;padding:6px 9px}.address{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#9aabc0;padding:0 10px}.error{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#512c34;color:#ffd5d7;padding:8px 20px}.error button{background:none;border:0;padding:2px 8px} main{height:calc(100vh - 150px);overflow:auto}.settings{max-width:1150px;margin:0 auto;padding:45px 35px}.eyebrow{font-size:11px;letter-spacing:2px;font-weight:700;color:#67dfc2}h1{font-size:30px;letter-spacing:-1px;margin:10px 0}p{line-height:1.6;color:#9aabc0}h2{font-size:17px;margin:0 0 22px}.intro{margin-bottom:30px}.settings-grid{display:grid;grid-template-columns:1.3fr 1fr;gap:22px;margin-bottom:24px}.card{background:#172233;border:1px solid #2c3b50;border-radius:14px;padding:25px}.count{font-size:12px;background:#2a3c50;padding:3px 8px;border-radius:12px;margin-left:6px}.instance-row{padding:17px 0;border-top:1px solid #2c3b50}.instance-row p{font-size:12px;margin:4px 0;overflow-wrap:anywhere}.row-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}.row-actions button{font-size:11px;padding:5px 8px}.badge{display:inline-block;margin-top:5px;color:#67dfc2;background:#1c3b3a;padding:3px 7px;border-radius:5px;font-size:10px}.danger{color:#ffafb8}.card label{display:flex;flex-direction:column;gap:8px;margin:18px 0;font-weight:550}.muted{font-size:12px}.primary{background:#65dabc;color:#092a23;border-color:#65dabc;font-weight:700}.primary:hover:not(:disabled){background:#83e7ce}.form-actions{display:flex;gap:10px}.footnote{margin-top:20px}.new-tab{max-width:540px;margin:70px auto}.empty{text-align:center;margin:100px 25px}@media(max-width:850px){.settings-grid{grid-template-columns:1fr}.topbar{gap:12px}.brand span{display:none}.settings{padding:25px}}
 </style>

@@ -1,6 +1,6 @@
 [package]
 name = "runtipi-desktop"
-version = "0.1.0-alpha.4"
+version = "0.1.0-alpha.5"
 description = "A desktop workspace for multiple Runtipi instances"
 authors = ["EckPhi"]
 license = "MIT"
@@ -20,6 +20,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["unstable"] }
+tokio = { version = "1", features = ["process", "time", "sync"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }

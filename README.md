@@ -35,6 +35,18 @@ uname -m
 
 A valid ad-hoc signature checks bundle integrity but does not verify the publisher or grant Gatekeeper approval. Distribution without manual approval requires a Developer ID Application certificate and Apple notarization. See [Tauri’s macOS signing documentation](https://v2.tauri.app/distribute/sign/macos/).
 
+## Proton Pass login filling
+
+Install the [official Proton Pass CLI](https://protonpass.github.io/pass-cli/) on your desktop, then authenticate with `pass-cli login` in a terminal. Configure a default vault in the CLI, or enter a vault name under **Settings → Proton Pass**. If necessary, set the absolute path to `pass-cli` there (especially for macOS apps launched from Finder).
+
+On a login page, choose **Proton Pass** in the toolbar, select a saved login, and review the filled fields before submitting. Save the exact dashboard or app URL in that Proton login: filling requires matching scheme, hostname, and effective port. Subdomains and HTTP/HTTPS are treated separately. Select **Username only** or **Password only** for two-step login pages.
+
+The picker reads login titles and IDs from the configured vault. Rust retrieves only the selected login, checks its saved URLs and the current page, then fills visible standard input fields. Credentials are not persisted, logged, copied to the clipboard, or returned to the local UI. The target website receives the credentials, as with a normal login. Nothing is submitted automatically. CLI authentication remains managed by Proton.
+
+This initial integration does not handle passkeys, TOTP, iframe/shadow-DOM forms, or ambiguous forms. [Proton desktop auto-type](https://proton.me/support/pass-autotype) is an alternative for those pages. Browser extensions cannot be installed into this app's embedded browser.
+
+Bitwarden has no direct integration yet. Its [desktop drag-and-drop](https://bitwarden.com/help/auto-fill-browser/) can work with compatible fields, or you can use its extension after choosing **Open externally**. A Bitwarden CLI adapter is possible as a follow-up. Apple Passwords and 1Password are not integrated.
+
 ## Development
 
 Install Node.js 24, stable Rust, and the [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/).
